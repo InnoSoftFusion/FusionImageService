@@ -24,9 +24,11 @@ reason for this example
 */
 
 //////////////////////////////////////////////// CONFIG SECTION - CHANGE THESE VALUES////////////////////////////////////////////////
-var clientCreds = [{ clientId : '{clientId}', clientSecret : '{clientSecret}}', redirectUris : [''], grants: ['client_credentials'] }];
+var clientCreds = [{ clientId : '{clientId}', clientSecret : '{clientSecret}', redirectUris : [''], grants: ['client_credentials'] }];
 var userCreds = [{ id : '123', username: '{username}', password: '{password}', grants: ['password'] }];
 const serverPort = 8000;
+var hashingAlgorithm = 'sha512';// md5 | sha1 | sha256 | sha512
+var sharedKey = '123456abcdef'
 //////////////////////////////////////////////// END OFCONFIG SECTION///////////////////////////////////////////////////////////////
 
 
@@ -34,8 +36,10 @@ var bodyParser = require('body-parser');
 var express = require('express');
 var OAuthServer = require('express-oauth-server');
 var app = express();
-let fs = require('fs');
+let fs = require('fs'); 
 const MemoryStore = require('./model.js');
+var crypto = require('crypto');
+const utf8 = require('utf8'); 
 
 const memoryStore = new MemoryStore(clientCreds, userCreds)
 
@@ -57,13 +61,27 @@ app.get('/api/person/getPersonImage/:externalId', app.oauth.authenticate(), asyn
     getImage(res, req.params.externalId);
  });
 
- // No Auth endpoint
+ // No Auth Endpoint
  app.get('/api/person/getPersonImageNoAuth/:externalId', async function (req, res, next) { 
     getImage(res, req.params.externalId);
  });
 
+// Hash Endpoint
+app.get('/api/person/getPersonImage/:externalId/:hash', async function (req, res, next) { 
+    if(verifyHash(req.params.hash,req.params.externalId))
+    {
+       getImage(res, req.params.externalId);
+    }
+    else
+    {
+        return res.status(400).send('Invalid Hash')
+    }
+});
+
+
  // Main image fetch method
  function getImage(res, externalId){
+    
     var fileName = externalId + '.jpg';
     var stream
     if (fs.existsSync(fileName)) {
@@ -76,6 +94,15 @@ app.get('/api/person/getPersonImage/:externalId', app.oauth.authenticate(), asyn
         stream.pipe(res);
     });
  }
+
+ // Verify Hash Method
+ function verifyHash(incomingHashValue, externalId){
+    var hash = crypto.createHash(hashingAlgorithm);
+    var toHash = utf8.encode(externalId + sharedKey);
+    hash.update(toHash);
+    var hashValue = hash.digest('hex');
+    return hashValue === incomingHashValue;
+  }
 
 
 app.listen(serverPort, () => console.log(`listening on port ${serverPort}`));
